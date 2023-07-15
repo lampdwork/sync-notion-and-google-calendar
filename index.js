@@ -2,7 +2,8 @@ require('dotenv').config()
 const express = require('express')
 const { google } = require('googleapis')
 const fs = require('fs')
-const { getEvents, createEvent } = require('./googleCalendar')
+const { getEvents, createEvent, clearEvents } = require('./googleCalendar')
+const { getTaskListInfo, getTaskListData } = require('./notion')
 
 const app = express()
 
@@ -26,7 +27,7 @@ const calendar = google.calendar({
 })
 
 app.get('/events', (req, res) => {
-  getEvents(10)
+  getEvents()
     .then((events) => {
       if (events.length) {
         res.send(JSON.stringify({ events: events }))
@@ -39,36 +40,110 @@ app.get('/events', (req, res) => {
     })
 })
 
-app.get('/createEvent', (req, res) => {
-  var event = {
-    summary: 'My first event!',
-    location: 'Hyderabad,India',
-    description: 'First event with nodeJS!',
-    start: {
-      dateTime: new Date().toISOString()
-    },
-    end: {
-      dateTime: new Date().toISOString()
-    },
-    attendees: [],
-    reminders: {
-      useDefault: false,
-      overrides: [
-        { method: 'email', minutes: 24 * 60 },
-        { method: 'popup', minutes: 10 }
-      ]
-    }
-  }
+app.get('/taskListInfo', (req, res) => {
+  getTaskListInfo().then((rs) => {
+    console.log(rs)
+    res.jsonp(rs)
+  })
+})
 
-  createEvent(event)
-    .then((rs) => {
-      console.log(rs)
-      res.jsonp(rs)
+app.get('/taskList', (req, res) => {
+  getTaskListData().then((rs) => {
+    console.log(rs)
+    res.jsonp(rs)
+  })
+})
+
+app.get('/clearCalendar', async (req, res) => {
+  try {
+    await clearEvents()
+
+    res.send(JSON.stringify({ message: 'Clear successful' }))
+  } catch (err) {
+    console.log(err)
+    res.send(JSON.stringify({ error: err }))
+  }
+})
+
+app.get('/syncToCalendar', async (req, res) => {
+  const now = new Date()
+  const oneDayAgo = new Date(now.getTime() - 1 * 24 * 60 * 60 * 1000)
+  // const oneMonthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+
+  try {
+    await clearEvents(oneDayAgo.toISOString())
+    const tasks = await getTaskListData()
+    const events = await getEvents(1000, oneDayAgo.toISOString())
+    const eventTitles = events.map((event) => event.summary)
+    var countErr = 0
+
+    const newTasks = tasks.filter(
+      (task) =>
+        !eventTitles.includes(task.properties.Name.title[0].plain_text) &&
+        task.properties['Due date'].date?.start
+    )
+    const newEvents = newTasks.map((task) => {
+      const isAllDay = !task.properties['Due date'].date?.start.includes('T')
+      return {
+        summary: task.properties.Name.title[0].plain_text,
+        start: {
+          date: isAllDay ? task.properties['Due date'].date?.start : undefined,
+          dateTime: !isAllDay
+            ? task.properties['Due date'].date?.start
+            : undefined
+        },
+        end: {
+          date: isAllDay
+            ? task.properties['Due date'].date?.end ||
+              task.properties['Due date'].date?.start
+            : undefined,
+          dateTime: !isAllDay
+            ? task.properties['Due date'].date?.end ||
+              task.properties['Due date'].date?.start
+            : undefined
+        },
+        description: `
+Link: ${task.url}
+Task ID: ${task.properties.ID.unique_id.prefix}${
+          task.properties.ID.unique_id.number
+        }
+Priority: ${task.properties.Priority?.select?.name}
+Type: ${task.properties.Type?.select?.name}
+Tags: ${task.properties.Tag.multi_select?.map((tag) => tag?.name).join(', ')}
+        `,
+        attendees: [],
+        reminders: {
+          useDefault: true
+          // overrides: [
+          //   { method: 'email', minutes: 24 * 60 },
+          //   { method: 'popup', minutes: 10 }
+          // ]
+        }
+      }
     })
-    .catch((err) => {
-      console.log(err)
-      res.jsonp(err)
+
+    newEvents.forEach((event, idx) => {
+      setTimeout(async () => {
+        createEvent(event)
+          .then((rs) => {
+            console.log(
+              `Sync ${Math.floor(
+                ((idx + 1 - countErr) / newEvents.length) * 100
+              )}% done`
+            )
+          })
+          .catch((err) => {
+            countErr += 1
+            console.log(err)
+          })
+      }, idx * 500)
     })
+
+    res.send(JSON.stringify({ message: 'Sync successful' }))
+  } catch (err) {
+    console.log(err)
+    res.send(JSON.stringify({ error: err }))
+  }
 })
 
 app.listen(3000, () => console.log(`App listening on port 3000!`))

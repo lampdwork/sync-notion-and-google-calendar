@@ -1,4 +1,3 @@
-require('dotenv').config()
 const { google } = require('googleapis')
 const fs = require('fs')
 
@@ -21,23 +20,28 @@ const calendar = google.calendar({
   auth: jwtClient
 })
 
-const getEvents = async (maxResult) => {
+const getEvents = async (
+  maxResult = 1000,
+  timeMin = new Date().toISOString(),
+  timeMax
+) => {
   const result = await calendar.events.list({
     calendarId: GOOGLE_CALENDAR_ID,
-    timeMin: new Date().toISOString(),
-    maxResults: maxResult,
+    timeMin,
+    timeMax,
+    maxResults: Math.min(maxResult, 1000),
     singleEvents: true,
     orderBy: 'startTime'
   })
   return result.data.items
 }
 
-const createEvent = async (event) => {
-  const auth = new google.auth.GoogleAuth({
-    keyFile: './key.json',
-    scopes: 'https://www.googleapis.com/auth/calendar'
-  })
+const auth = new google.auth.GoogleAuth({
+  keyFile: './key.json',
+  scopes: 'https://www.googleapis.com/auth/calendar'
+})
 
+const createEvent = async (event) => {
   const result = await auth.getClient().then((a) => {
     return calendar.events.insert({
       auth: a,
@@ -49,7 +53,48 @@ const createEvent = async (event) => {
   return result.data
 }
 
+const clearEvents = async (timeMin = undefined, maxResults = 1000) => {
+  try {
+    await auth.getClient().then(async (a) => {
+      const events = await calendar.events.list({
+        calendarId: GOOGLE_CALENDAR_ID,
+        singleEvents: false,
+        timeMin,
+        maxResults
+      })
+
+      events.data.items.forEach((event, idx) => {
+        setTimeout(() => {
+          calendar.events.delete(
+            {
+              auth: a,
+              calendarId: GOOGLE_CALENDAR_ID,
+              eventId: event.id
+            },
+            (err, res) => {
+              if (err) {
+                console.log('Error: ', err)
+                return
+              }
+              console.log(
+                `Deleted ${Math.floor(
+                  ((idx + 1) / events.data.items.length) * 100
+                )}%`
+              )
+            }
+          )
+        }, idx * 500)
+      })
+    })
+    return 'Clear successful'
+  } catch (err) {
+    console.log(err)
+    throw err
+  }
+}
+
 module.exports = {
   getEvents,
-  createEvent
+  createEvent,
+  clearEvents
 }
