@@ -52,6 +52,7 @@ app.get('/syncToCalendar', async (req, res) => {
   // const oneMonthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
 
   try {
+    // Cần update lại logic clear event, chỉ clear và update những event có sự thay đổi
     await clearEvents(oneDayAgo.toISOString())
     const tasks = await getTaskListData()
     const events = await getEvents(1000, oneDayAgo.toISOString())
@@ -60,13 +61,13 @@ app.get('/syncToCalendar', async (req, res) => {
 
     const newTasks = tasks.filter(
       (task) =>
-        !eventTitles.includes(task.properties.Name.title[0].plain_text) &&
+        !eventTitles.includes(task.properties.Name.title[0].text?.content) &&
         task.properties['Due date'].date?.start
     )
     const newEvents = newTasks.map((task) => {
       const isAllDay = !task.properties['Due date'].date?.start.includes('T')
       return {
-        summary: task.properties.Name.title[0].plain_text,
+        summary: task.properties.Name.title[0].text?.content,
         start: {
           date: isAllDay ? task.properties['Due date'].date?.start : undefined,
           dateTime: !isAllDay
@@ -117,7 +118,7 @@ Tags: ${task.properties.Tag.multi_select?.map((tag) => tag?.name).join(', ')}
             countErr += 1
             console.log(err)
           })
-      }, idx * 500)
+      }, idx * 1000)
     })
 
     res.send(JSON.stringify({ message: 'Sync successful' }))
