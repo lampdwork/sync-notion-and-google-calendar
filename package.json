@@ -4,6 +4,9 @@
   "main": "index.js",
   "author": "Dang Lam",
   "license": "MIT",
+  "scripts": {
+    "start": "node index.js"
+  },
   "dependencies": {
     "@notionhq/client": "^2.2.7",
     "dotenv": "^16.3.1",
