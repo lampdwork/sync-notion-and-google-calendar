@@ -85,7 +85,7 @@ const clearEvents = async (timeMin = undefined, maxResults = 1000) => {
               )
             }
           )
-        }, idx * 500)
+        }, idx * 1000)
       })
     })
     return 'Clear successful'
