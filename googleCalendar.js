@@ -1,5 +1,11 @@
 const { google } = require('googleapis')
 const fs = require('fs')
+const dayjs = require('dayjs')
+const utc = require('dayjs/plugin/utc')
+const timezone = require('dayjs/plugin/timezone')
+
+dayjs.extend(utc)
+dayjs.extend(timezone)
 
 const SCOPES = 'https://www.googleapis.com/auth/calendar.readonly'
 const GOOGLE_PRIVATE_KEY = process.env.GOOGLE_PRIVATE_KEY.split(
@@ -24,7 +30,7 @@ const calendar = google.calendar({
 
 const getEvents = async (
   maxResult = 1000,
-  timeMin = new Date().toISOString(),
+  timeMin = dayjs().tz('Asia/Ho_Chi_Minh').startOf('day').toISOString(),
   timeMax
 ) => {
   const result = await calendar.events.list({
@@ -60,7 +66,7 @@ const clearEvents = async (timeMin = undefined, maxResults = 1000) => {
     await auth.getClient().then(async (a) => {
       const events = await calendar.events.list({
         calendarId: GOOGLE_CALENDAR_ID,
-        singleEvents: false,
+        singleEvents: true,
         timeMin,
         maxResults
       })

@@ -2,6 +2,13 @@ require('dotenv').config()
 const express = require('express')
 const { google } = require('googleapis')
 const fs = require('fs')
+const dayjs = require('dayjs')
+const utc = require('dayjs/plugin/utc')
+const timezone = require('dayjs/plugin/timezone')
+
+dayjs.extend(utc)
+dayjs.extend(timezone)
+
 const { getEvents, createEvent, clearEvents } = require('./googleCalendar')
 const { getTaskListInfo, getTaskListData } = require('./notion')
 
@@ -47,8 +54,9 @@ app.get('/clearCalendar', async (req, res) => {
 })
 
 app.get('/syncToCalendar', async (req, res) => {
-  const now = new Date()
-  const oneDayAgo = new Date(now.getTime() - 1 * 24 * 60 * 60 * 1000)
+  const now = dayjs().tz('Asia/Ho_Chi_Minh').startOf('day')
+  const oneDayAgo = now.subtract(1, 'day')
+  // const oneDayAgo = new Date(now.getTime() - 1 * 24 * 60 * 60 * 1000)
   // const oneMonthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
 
   try {
